@@ -432,6 +432,7 @@ Recurso `Webhook` (representação pública; **a secret nunca é devolvida**, ex
 
 ### 5.3 `GET /api/v1/webhooks/:id`: detalhar webhook
 
+- 🔶 **P-31:** este endpoint **não foi discutido na reunião**, que citou só "GET pra listar" ([09:33] Bruno). Proponho para completar o CRUD de RF3 e consultar um webhook pelo `id` devolvido no cadastro.
 - **Auth:** qualquer usuário autenticado.
 - **Response `200 OK`:** o recurso `Webhook`.
 - **Erros:** `400 VALIDATION_ERROR`, `401 UNAUTHORIZED` e `404 WEBHOOK_NOT_FOUND` (também quando foi removido, P-12).
@@ -730,7 +731,7 @@ Como `env.ts` faz `process.exit(1)` quando o env é inválido, `WEBHOOK_SECRET_E
 | **Perda da `WEBHOOK_SECRET_ENCRYPTION_KEY`** | Todas as secrets ficam irrecuperáveis. O worker manda tudo para a DLQ com `WEBHOOK_SECRET_REQUIRED` | Guardar a chave no mesmo cofre do `JWT_SECRET`. Rotacionar todas as secrets é o plano de recuperação. Levar à revisão da Sofia (RNF10) |
 | **Transação de `changeStatus` mais lenta** | Mais contenção e risco de chegar perto do timeout default do Prisma | Índice `[customerId, active]` e `createMany` num único statement. O fan-out é limitado ao número de endpoints do customer |
 | **Bytes diferentes entre o que foi assinado e o que foi enviado** | O cliente rejeita a assinatura | Assinar e enviar **a mesma string** `body` gerada no worker, sem reserializar no `fetch` |
-| **SSRF / URLs internas.** Um usuário autenticado cadastra `https://10.0.0.5/…` | O worker faz requisições para a rede interna | Não discutido na reunião. Levar à revisão da Sofia. `redirect: 'manual'` (P-22) já fecha o desvio por redirect |
+| **SSRF / URLs internas.** Um usuário autenticado cadastra `https://10.0.0.5/…` | O worker faz requisições para a rede interna | 🔶 **P-32:** risco levantado por este FDD, não discutido na reunião. Levar à revisão da Sofia. `redirect: 'manual'` (P-22) já fecha o desvio por redirect |
 | **Endpoint lento travando o batch** | Até 10s por envio atrasa outros clientes, contra OBJ-01 | Paralelismo entre grupos de `orderId` (P-20) e batch pequeno (P-19) |
 | **Crescimento das tabelas** (`webhook_outbox` `DELIVERED` e `webhook_deliveries`) | Polling e consultas de histórico ficam mais lentos | Índices em `[status, nextAttemptAt]` e `[webhookId, createdAt]`. `responseBody` truncado em 2KB. O arquivamento está fora de escopo ([09:08] Diego) e deve ser monitorado com `outbox_pending_count` e o tamanho das tabelas |
 | **Duplicata depois de crash** | O cliente recebe o mesmo evento duas vezes | Aceito pelo at-least-once ([ADR-005](adrs/ADR-005-at-least-once-com-x-event-id.md)). O `X-Event-Id` é estável, inclusive no replay (P-04) |
@@ -782,7 +783,7 @@ Todos os caminhos abaixo existem no repositório. A coluna "Tipo" diz se o arqui
 
 ## 13. Premissas assumidas pelo FDD
 
-> **Todas as premissas abaixo são escolhas deste FDD, não decisões da reunião.** Elas existem porque não dá para especificar fluxos e contratos sem resolver esses pontos. **Cada uma precisa ser validada com a equipe** antes da implementação. As premissas de segurança (P-02, P-03, P-11, P-22) vão para a revisão da Sofia (RNF10).
+> **Todas as premissas abaixo são escolhas deste FDD, não decisões da reunião.** Elas existem porque não dá para especificar fluxos e contratos sem resolver esses pontos. **Cada uma precisa ser validada com a equipe** antes da implementação. As premissas de segurança (P-02, P-03, P-11, P-22, P-32) vão para a revisão da Sofia (RNF10).
 
 ### Premissas que fecham as questões em aberto do RFC
 
@@ -823,3 +824,5 @@ Todos os caminhos abaixo existem no repositório. A coluna "Tipo" diz se o arqui
 | P-28 | A verificação de `https` fica no **service**, para emitir `WEBHOOK_INVALID_URL`. Em [09:23] Sofia falou em "schema Zod", mas lá o código sairia como `VALIDATION_ERROR` | 5.1, 6 |
 | P-29 | Métricas derivadas de logs (`webhook_worker_stats`) e de SQL, sem biblioteca de métricas | 8.1 |
 | P-30 | O `requestId` não é persistido na outbox. A correlação passa por `orderId` → `eventId` | 8.3 |
+| P-31 | Existe um endpoint `GET /webhooks/:id` para detalhar um webhook, não discutido na reunião (só "GET pra listar") | 5.3 |
+| P-32 | SSRF por URL interna é um risco identificado por este FDD, não discutido na reunião; a mitigação vai para a revisão da Sofia (RNF10) | 11 |
